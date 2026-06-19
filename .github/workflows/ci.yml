@@ -21,6 +21,10 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+      
+      - name: Set lowercase repository name
+        run: |
+          echo "REPO_LC=${GITHUB_REPOSITORY,,}" >> ${GITHUB_ENV}
 
       - name: Install cosign
         if: env.pushing == 'true'
@@ -43,16 +47,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@902fa8ec7d6ecbf8d84d538b9b233a880e428804 # v5.7.0
         with:
-          images: ghcr.io/${{ github.repository }}
-          flavor: |
-            latest=true
-          # This forces the repository name to lowercase
-          tags: |
-            type=raw,value={{date 'YYYYMMDD'}}
-            type=sha,format=long
-        # Add this to ensure the generated tag is lowercase
-        env:
-          DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest,index
+          images: ghcr.io/${{ env.REPO_LC }}
 
       # Build and push to registry
       - name: Build and push Docker image
@@ -65,8 +60,8 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           annotations: ${{ steps.meta.outputs.annotations }}
-          cache-from: type=registry,ref=ghcr.io/${{ github.repository }}:buildcache
-          cache-to: type=registry,ref=ghcr.io/${{ github.repository }}:buildcache,mode=max
+          cache-from: type=registry,ref=ghcr.io/${{ env.REPO_LC }}:buildcache
+          cache-to: type=registry,ref=ghcr.io/${{ env.REPO_LC }}:buildcache,mode=max
 
       # Export the image as a local tarball for the next job
       - name: Build and save local Docker image
