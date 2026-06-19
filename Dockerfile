@@ -1,7 +1,7 @@
 # ==============================================================================
 # STAGE 1: Build the Experimental LLVM Backend
 # ==============================================================================
-FROM debian:bullseye-slim AS llvm-builder
+FROM debian:bookworm-slim AS llvm-builder
 
 # Install host tools needed to compile LLVM
 RUN apt-get -qq update && apt-get -y install \
@@ -38,7 +38,7 @@ RUN ninja -j$(nproc) install
 # ==============================================================================
 # STAGE 2: Final Minimal User Image
 # ==============================================================================
-FROM debian:bullseye-slim
+FROM debian:bookworm-slim
 
 ENV USERNAME="dev"
 ENV LLVM_DIR=/opt/llvm-sh4
