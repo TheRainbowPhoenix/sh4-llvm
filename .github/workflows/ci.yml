@@ -1,0 +1,100 @@
+name: C/C++ CI (LLVM SH4)
+
+on:
+  push:
+    branches: [ "master", "main" ]
+    tags: [ 'v*.*.*' ]
+  pull_request:
+    branches: [ "master", "main" ]
+  workflow_dispatch:
+
+jobs:
+  build-docker:
+    runs-on: ubuntu-latest
+    env:
+      pushing: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository || github.event_name != 'pull_request' }}
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install cosign
+        if: env.pushing == 'true'
+        uses: sigstore/cosign-installer@3454372f43399081ed03b604cb2d021dabca52bb #v3.8.2
+        with:
+          cosign-release: 'v2.4.3'
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@b5ca514318bd6ebac0fb2aedd5d36ec1b5c232a2 # v3.10.0
+
+      - name: Log into registry ghcr.io
+        if: env.pushing == 'true'
+        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@902fa8ec7d6ecbf8d84d538b9b233a880e428804 # v5.7.0
+        with:
+          images: ghcr.io/${{ github.repository }}
+
+      # Build and push to registry
+      - name: Build and push Docker image
+        id: build-and-push
+        uses: docker/build-push-action@1dc73863535b631f98b2378be8619f83b136f4a0 # v6.17.0
+        with:
+          context: .
+          file: ./Dockerfile
+          push: ${{ env.pushing }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
+          cache-from: type=registry,ref=ghcr.io/${{ github.repository }}:buildcache
+          cache-to: type=registry,ref=ghcr.io/${{ github.repository }}:buildcache,mode=max
+
+      # Export the image as a local tarball for the next job
+      - name: Build and save local Docker image
+        id: build-and-save-local
+        uses: docker/build-push-action@1dc73863535b631f98b2378be8619f83b136f4a0 # v6.17.0
+        with:
+          context: .
+          file: ./Dockerfile
+          tags: llvm-sh4-image
+          outputs: type=docker,dest=${{ runner.temp }}/image.tar
+
+      - name: Sign the published Docker image
+        if: env.pushing == 'true'
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+          DIGEST: ${{ steps.build-and-push.outputs.digest }}
+        run: echo "${TAGS}" | xargs -I {} cosign sign --yes {}@${DIGEST}
+
+      - name: Upload image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-image
+          path: ${{ runner.temp }}/image.tar
+
+  build-artifact:
+    needs: build-docker
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Download Docker image artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: docker-image
+        path: ${{ runner.temp }}
+    
+    - name: Load Docker image
+      run: docker load --input ${{ runner.temp }}/image.tar
+        
