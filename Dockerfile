@@ -15,21 +15,21 @@ RUN git clone --recurse-submodules --branch=sh4 https://github.com/KitsunebiGame
 WORKDIR /build/llvm-project/build
 
 # Configure and build LLVM
-# - We use Release mode to save time and massively reduce the final binary size.
-# - We set TARGETS_TO_BUILD to "host" so LLVM can build its internal tools (like tblgen).
-# - We set EXPERIMENTAL_TARGETS_TO_BUILD to "SuperH" to get the SH4 backend.
 RUN cmake -G Ninja ../llvm \
-    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_BUILD_TYPE=Debug \
     -DCMAKE_INSTALL_PREFIX=/opt/llvm-sh4 \
-    -DLLVM_ENABLE_PROJECTS="clang;lld" \
-    -DLLVM_TARGETS_TO_BUILD="host" \
-    -DLLVM_EXPERIMENTAL_TARGETS_TO_BUILD="SuperH" \
+    -DLLVM_ENABLE_PROJECTS="lld" \
+    -DLLVM_ENABLE_DUMP=1 \
+    -DLLVM_BINUTILS_INCDIR=/usr/include \
     -DLLVM_INCLUDE_TESTS=OFF \
     -DLLVM_INCLUDE_BENCHMARKS=OFF \
     -DLLVM_BUILD_TOOLS=ON \
+    -DLLVM_TARGETS_TO_BUILD="" \
+    -DLLVM_EXPERIMENTAL_TARGETS_TO_BUILD="SuperH" \
+    -DLLVM_PARALLEL_LINK_JOBS=16 \
+    -DLLVM_USE_LINKER=gold \
     -DCMAKE_C_COMPILER=clang \
-    -DCMAKE_CXX_COMPILER=clang++ \
-    -DLLVM_USE_LINKER=lld
+    -DCMAKE_CXX_COMPILER=clang++
 
 # Compile and install to /opt/llvm-sh4
 RUN ninja -j$(nproc) install
